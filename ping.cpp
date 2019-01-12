@@ -188,7 +188,6 @@ int ping(const string &target) {
 		sequence_number++;
 		send_icmp_packet(to, socket_id, sequence_number);
 		wait_for_icmp_response(socket_id, sequence_number);
-		sleep(1);
 	}
 
 	return 0;
