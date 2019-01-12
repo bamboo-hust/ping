@@ -63,7 +63,7 @@ sockaddr_in dns_lookup(const string &target) {
 	if (to.sin_addr.s_addr == (u_int)-1) {
 		hostent *hp = gethostbyname(target.c_str());
 		if (!hp) {
-			cerr << "unknown host "<< target << endl;
+			fprintf(stderr, "Unknown host %s\n", target.c_str());
 		} else {
 			memcpy(&to.sin_addr, hp->h_addr, hp->h_length);
 		}
@@ -85,7 +85,7 @@ string reverse_dns_lookup(const sockaddr_in &addr) {
 int create_socket() {
 	int socket_id = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (socket_id < 0) {
-		cerr << "please run as superuser" << endl;
+		fprintf(stderr, "Please run as superuser\n");
 		return -1;
 	}
 	return socket_id;
@@ -106,7 +106,7 @@ int send_icmp_packet(const sockaddr_in &to, int socket_id, int sequence_number) 
 	int num_char_sent = sendto(socket_id, out_buffer, outpacket_length, 0, (sockaddr*)&to, (socklen_t)sizeof(sockaddr_in));
 
 	if (num_char_sent < 0 || num_char_sent != outpacket_length) {
-		cerr << "sendto() error" << endl;
+		fprintf(stderr, "sendto() error\n");
 		return -1;
 	}
 
@@ -126,7 +126,7 @@ int wait_for_icmp_response(int socket_id, int sequence_number) {
 	while (true) {
 		int retval = select(socket_id + 1, &rfds, NULL, NULL, &tv);
 		if (retval == -1) {
-			cerr << "select() error" << endl;
+			fprintf(stderr, "select() error\n");
 			return -1;
 		} else if (retval) {
 			sockaddr from;
@@ -135,7 +135,7 @@ int wait_for_icmp_response(int socket_id, int sequence_number) {
 			static char *packet = new char[inpacket_length];
 			int num_char_read = recvfrom(socket_id, packet, inpacket_length, 0, &from, &fromlen);
 			if (num_char_read < 0) {
-				cerr << "recvfrom() error" << endl;
+				fprintf(stderr, "recvfrom() error\n");
 				return -1;
 			}
 
@@ -143,7 +143,7 @@ int wait_for_icmp_response(int socket_id, int sequence_number) {
 			ip *ip_packet = (ip*)(packet); 
 			int ip_header_len = sizeof(ip); 
 			if (num_char_read < (ip_header_len + ICMP_MINLEN)) {
-				cerr << "packet too short (" << num_char_read  << " bytes)" << endl;
+				fprintf(stderr, "Packet too short (%d bytes)\n", num_char_read);
 				return -1; 
 			} 
 
@@ -151,15 +151,14 @@ int wait_for_icmp_response(int socket_id, int sequence_number) {
 			icmp *icmp_packet = (icmp*)(packet + ip_header_len); 
 			if (icmp_packet->icmp_type == ICMP_ECHOREPLY) {
 				if (icmp_packet->icmp_id != getpid()) {
-					//cout << "received id " << icmp_packet->icmp_id << endl;
 					continue;
 				}
 				if (icmp_packet->icmp_seq != sequence_number) {
-					cout << "received sequence #" << icmp_packet->icmp_seq << ", expected " << sequence_number << endl;
+					printf("Received sequence #%d, expected #%d\n", icmp_packet->icmp_seq, sequence_number);
 					continue;
 				}
 			} else {
-				cout << "Recv: not an echo reply" << endl;
+				fprintf(stderr, "Recv: not an echo reply\n");
 				continue;
 			}
 
@@ -188,6 +187,7 @@ int ping(const string &target) {
 		sequence_number++;
 		send_icmp_packet(to, socket_id, sequence_number);
 		wait_for_icmp_response(socket_id, sequence_number);
+		sleep(1);
 	}
 
 	return 0;
