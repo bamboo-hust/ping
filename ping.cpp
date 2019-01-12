@@ -23,7 +23,7 @@
 
 using namespace std;
 
-uint16_t in_cksum(uint16_t *addr, uint32_t len) {
+uint16_t checksum(uint16_t *addr, uint32_t len) {
 	uint16_t answer = 0;
 	uint32_t sum = 0;
 	while (len > 1) {
@@ -72,7 +72,7 @@ int ping(const string &target) {
 
 	static bool first_time = true;
 	if (first_time) {
-		printf("PING %s %d bytes of data\n", host_string.c_str(), ICMP_DATA_LENGTH);
+		printf("PING %s with %d bytes of data\n", host_string.c_str(), ICMP_DATA_LENGTH);
 		first_time = false;
 	}
 
@@ -86,14 +86,14 @@ int ping(const string &target) {
 	sequence_number++;
 
 	int outpacket_length = ICMP_DATA_LENGTH + ICMP_MINLEN;
-	char *out_buffer = new char[outpacket_length];
+	static char *out_buffer = new char[outpacket_length];
 	icmp *icmp_packet = (icmp*)out_buffer;
 	icmp_packet->icmp_type = ICMP_ECHO;
 	icmp_packet->icmp_seq = sequence_number;
 	icmp_packet->icmp_code = 0;
 	icmp_packet->icmp_cksum = 0;
 	icmp_packet->icmp_id = getpid();
-	icmp_packet->icmp_cksum = in_cksum((uint16_t*)icmp_packet, outpacket_length);
+	icmp_packet->icmp_cksum = checksum((uint16_t*)icmp_packet, outpacket_length);
 
 	clock_t start_time = clock();
 
@@ -123,7 +123,7 @@ int ping(const string &target) {
 			sockaddr from;
 			socklen_t fromlen = sizeof(sockaddr_in);
 			int inpacket_length = ICMP_DATA_LENGTH + MAX_IP_HEADER_LENGTH + MAX_ICMP_LENGTH;
-			char* packet = new char[inpacket_length];
+			static char *packet = new char[inpacket_length];
 			int num_char_read = recvfrom(socket_id, packet, inpacket_length, 0, &from, &fromlen);
 			if (num_char_read < 0) {
 				cerr << "recvfrom() error" << endl;
@@ -132,14 +132,14 @@ int ping(const string &target) {
 
 			// Check the IP header
 			ip *ip_packet = (ip*)(packet); 
-			int hlen = sizeof(ip); 
-			if (num_char_read < (hlen + ICMP_MINLEN)) {
+			int ip_header_len = sizeof(ip); 
+			if (num_char_read < (ip_header_len + ICMP_MINLEN)) {
 				cerr << "packet too short (" << num_char_read  << " bytes)" << endl;
 				return -1; 
 			} 
 
 			// Now the ICMP part 
-			icmp *icmp_packet = (icmp*)(packet + hlen); 
+			icmp *icmp_packet = (icmp*)(packet + ip_header_len); 
 			if (icmp_packet->icmp_type == ICMP_ECHOREPLY) {
 				if (icmp_packet->icmp_seq != sequence_number) {
 					cout << "received sequence #" << icmp_packet->icmp_seq << ", expected " << sequence_number << endl;
@@ -156,7 +156,7 @@ int ping(const string &target) {
 
 			int end_t = time_limit - tv.tv_sec * 1000000 - tv.tv_usec;  // second + microseconds
 			printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.2f ms\n", 
-				num_char_read - hlen, host_string.c_str(), icmp_packet->icmp_seq,
+				num_char_read - ip_header_len, host_string.c_str(), icmp_packet->icmp_seq,
 				ip_packet->ip_ttl, (1.0 * end_t / 1000));
 			return 0;
 		} else {
@@ -168,9 +168,7 @@ int ping(const string &target) {
 }
 
 int main(int argc, char **argv) {
-	cout << "target = " << argv[1] << endl;
-	int step = 1e9;
-	while (step--) {
+	while (true) {
 		sleep(1);
 		ping(argv[1]);
 	}
